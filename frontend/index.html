@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Real-Time System Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+      .pulse-animation {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      .progress-ring__circle {
+        transition: stroke-dashoffset 0.5s ease-in-out;
+        transform: rotate(-90deg);
+        transform-origin: 50% 50%;
+      }
+      .glow {
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.7);
+      }
+      .card-hover:hover {
+        transform: translateY(-5px);
+        transition: transform 0.3s ease;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+      <header class="flex justify-between items-center mb-8">
+        <div>
+          <h1
+            class="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-600"
+          >
+            System Pulse
+          </h1>
+          <p class="text-gray-400">Real-time system monitoring dashboard</p>
+        </div>
+        <div class="flex items-center space-x-2">
+          <div id="connectionStatus" class="flex items-center">
+            <span class="relative flex h-3 w-3">
+              <span
+                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"
+              ></span>
+              <span
+                class="relative inline-flex rounded-full h-3 w-3 bg-red-500"
+              ></span>
+            </span>
+            <span class="ml-2 text-sm">Disconnected</span>
+          </div>
+          <div class="text-gray-400" id="currentTime">--:--:--</div>
+        </div>
+      </header>
+
+      <!-- System Overview Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- CPU Card -->
+        <div
+          class="bg-gray-800 rounded-xl p-6 card-hover transition-all duration-300 glow"
+        >
+          <div class="flex justify-between items-start">
+            <div>
+              <h3 class="text-gray-400 font-medium">CPU Usage</h3>
+              <div class="text-3xl font-bold mt-2" id="cpuUsage">0%</div>
+            </div>
+            <div class="w-16 h-16">
+              <svg class="progress-ring" width="64" height="64">
+                <circle
+                  class="progress-ring__circle"
+                  stroke="url(#cpuGradient)"
+                  stroke-width="6"
+                  fill="transparent"
+                  r="25"
+                  cx="32"
+                  cy="32"
+                  stroke-dasharray="157"
+                  stroke-dashoffset="157"
+                />
+                <linearGradient
+                  id="cpuGradient"
+                  x1="0%"
+                  y1="0%"
+                  x2="100%"
+                  y2="0%"
+                >
+                  <stop offset="0%" stop-color="#3b82f6" />
+                  <stop offset="100%" stop-color="#8b5cf6" />
+                </linearGradient>
+              </svg>
+            </div>
+          </div>
+          <div class="mt-4">
+            <canvas id="cpuChart" height="80"></canvas>
+          </div>
+        </div>
+
+        <!-- Memory Card -->
+        <div
+          class="bg-gray-800 rounded-xl p-6 card-hover transition-all duration-300"
+        >
+          <div class="flex justify-between items-start">
+            <div>
+              <h3 class="text-gray-400 font-medium">Memory Usage</h3>
+              <div class="text-3xl font-bold mt-2" id="memoryUsage">0%</div>
+              <div class="text-sm text-gray-400 mt-1" id="memoryDetails">
+                0 GB / 0 GB
+              </div>
+            </div>
+            <div class="w-16 h-16">
+              <svg class="progress-ring" width="64" height="64">
+                <circle
+                  class="progress-ring__circle"
+                  stroke="#10b981"
+                  stroke-width="6"
+                  fill="transparent"
+                  r="25"
+                  cx="32"
+                  cy="32"
+                  stroke-dasharray="157"
+                  stroke-dashoffset="157"
+                />
+              </svg>
+            </div>
+          </div>
+          <div class="mt-4">
+            <div class="w-full bg-gray-700 rounded-full h-2.5">
+              <div
+                id="memoryBar"
+                class="bg-green-500 h-2.5 rounded-full"
+                style="width: 0%"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Uptime Card -->
+        <div
+          class="bg-gray-800 rounded-xl p-6 card-hover transition-all duration-300"
+        >
+          <div>
+            <h3 class="text-gray-400 font-medium">System Uptime</h3>
+            <div class="text-3xl font-bold mt-2" id="uptime">--:--:--</div>
+          </div>
+          <div class="mt-4 flex items-center">
+            <div class="w-2 h-2 rounded-full bg-green-500 mr-2"></div>
+            <span class="text-sm text-gray-400">System operational</span>
+          </div>
+        </div>
+
+        <!-- Process Count Card -->
+        <div
+          class="bg-gray-800 rounded-xl p-6 card-hover transition-all duration-300"
+        >
+          <div>
+            <h3 class="text-gray-400 font-medium">Running Processes</h3>
+            <div class="text-3xl font-bold mt-2" id="processCount">0</div>
+          </div>
+          <div class="mt-4">
+            <div
+              class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-900 text-blue-200"
+            >
+              <span id="threadCount">0</span> threads
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Content -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Process Table -->
+        <div class="lg:col-span-2 bg-gray-800 rounded-xl overflow-hidden">
+          <div class="p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-xl font-bold">Process Manager</h2>
+              <div class="relative">
+                <input
+                  type="text"
+                  placeholder="Filter processes..."
+                  class="bg-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  id="processFilter"
+                />
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-gray-700">
+                  <tr>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                    >
+                      PID
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                    >
+                      CPU%
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                    >
+                      MEM%
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                    >
+                      Command
+                    </th>
+                    <th
+                      class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider"
+                    >
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700" id="processTable">
+                  <tr>
+                    <td colspan="5" class="px-6 py-4 text-center text-gray-400">
+                      Loading process data...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- System Info -->
+        <div class="bg-gray-800 rounded-xl overflow-hidden">
+          <div class="p-6">
+            <h2 class="text-xl font-bold mb-4">System Information</h2>
+
+            <div class="space-y-4">
+              <div>
+                <h3 class="text-gray-400 text-sm font-medium">Hostname</h3>
+                <div class="text-lg font-mono" id="hostname">-</div>
+              </div>
+
+              <div>
+                <h3 class="text-gray-400 text-sm font-medium">OS Platform</h3>
+                <div class="text-lg" id="platform">-</div>
+              </div>
+
+              <div>
+                <h3 class="text-gray-400 text-sm font-medium">CPU Cores</h3>
+                <div class="text-lg" id="cpuCores">-</div>
+              </div>
+
+              <div>
+                <h3 class="text-gray-400 text-sm font-medium">CPU Model</h3>
+                <div class="text-lg" id="cpuModel">-</div>
+              </div>
+
+              <div>
+                <h3 class="text-gray-400 text-sm font-medium">Total Memory</h3>
+                <div class="text-lg" id="totalMemory">-</div>
+              </div>
+            </div>
+
+            <div class="mt-6 pt-4 border-t border-gray-700">
+              <h3 class="text-gray-400 text-sm font-medium mb-2">
+                Network Activity
+              </h3>
+              <div class="flex justify-between mb-1">
+                <span class="text-sm text-gray-300">Upload</span>
+                <span class="text-sm font-mono" id="networkUpload">0 KB/s</span>
+              </div>
+              <div class="w-full bg-gray-700 rounded-full h-2 mb-4">
+                <div
+                  id="uploadBar"
+                  class="bg-purple-500 h-2 rounded-full"
+                  style="width: 0%"
+                ></div>
+              </div>
+
+              <div class="flex justify-between mb-1">
+                <span class="text-sm text-gray-300">Download</span>
+                <span class="text-sm font-mono" id="networkDownload"
+                  >0 KB/s</span
+                >
+              </div>
+              <div class="w-full bg-gray-700 rounded-full h-2">
+                <div
+                  id="downloadBar"
+                  class="bg-blue-500 h-2 rounded-full"
+                  style="width: 0%"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CPU Cores Visualization -->
+      <div class="mt-8 bg-gray-800 rounded-xl p-6">
+        <h2 class="text-xl font-bold mb-4">CPU Cores Utilization</h2>
+        <div
+          class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4"
+          id="cpuCoresContainer"
+        >
+          <!-- CPU cores will be added here dynamically -->
+          <div class="text-center">
+            <div class="h-24 mx-auto">
+              <svg class="progress-ring" width="80" height="80">
+                <circle
+                  class="progress-ring__circle"
+                  stroke="#3b82f6"
+                  stroke-width="6"
+                  fill="transparent"
+                  r="30"
+                  cx="40"
+                  cy="40"
+                  stroke-dasharray="188.4"
+                  stroke-dashoffset="188.4"
+                />
+              </svg>
+            </div>
+            <div class="mt-2 font-medium">Core 0</div>
+            <div class="text-sm text-gray-400" id="core-0">0%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Initialize variables
+      let cpuChart;
+      let cpuData = Array(20).fill(0);
+      let memoryData = Array(20).fill(0);
+      let previousNetworkStats = { rx: 0, tx: 0 };
+      let firstNetworkMeasurement = true;
+
+      // Connect to Socket.IO server
+      const socket = io("http://localhost:3000");
+
+      // Update current time every second
+      function updateClock() {
+        const now = new Date();
+        document.getElementById("currentTime").textContent =
+          now.toLocaleTimeString();
+      }
+      setInterval(updateClock, 1000);
+      updateClock();
+
+      // Initialize CPU chart
+      function initCPUChart() {
+        const ctx = document.getElementById("cpuChart").getContext("2d");
+        cpuChart = new Chart(ctx, {
+          type: "line",
+          data: {
+            labels: Array(20).fill(""),
+            datasets: [
+              {
+                label: "CPU Usage",
+                data: cpuData,
+                borderColor: "#8b5cf6",
+                backgroundColor: "rgba(139, 92, 246, 0.1)",
+                borderWidth: 2,
+                tension: 0.3,
+                fill: true,
+                pointRadius: 0,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                min: 0,
+                max: 100,
+                grid: {
+                  color: "rgba(255, 255, 255, 0.1)",
+                },
+                ticks: {
+                  color: "#9CA3AF",
+                },
+              },
+              x: {
+                grid: {
+                  display: false,
+                },
+                ticks: {
+                  display: false,
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                enabled: false,
+              },
+            },
+          },
+        });
+      }
+
+      // Update circular progress indicators
+      function updateProgressRing(selector, percent) {
+        const circle = document.querySelector(
+          `${selector} .progress-ring__circle`
+        );
+        if (circle) {
+          const radius = circle.r.baseVal.value;
+          const circumference = 2 * Math.PI * radius;
+          const offset = circumference - (percent / 100) * circumference;
+          circle.style.strokeDashoffset = offset;
+        }
+      }
+
+      // Format bytes to human readable
+      function formatBytes(bytes, decimals = 2) {
+        if (bytes === 0) return "0 Bytes";
+        const k = 1024;
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ["Bytes", "KB", "MB", "GB", "TB"];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat(
+          (bytes / Math.pow(k, i)).toFixed(dm) + " " + sizes[i]
+        );
+      }
+
+      // Format uptime seconds to HH:MM:SS
+      function formatUptime(seconds) {
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${hrs.toString().padStart(2, "0")}:${mins
+          .toString()
+          .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+      }
+
+      // Socket.IO event handlers
+      socket.on("connect", () => {
+        console.log("Connected to server");
+        document.getElementById("connectionStatus").innerHTML = `
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+          </span>
+          <span class="ml-2 text-sm">Connected</span>
+        `;
+      });
+
+      socket.on("disconnect", () => {
+        document.getElementById("connectionStatus").innerHTML = `
+          <span class="relative flex h-3 w-3">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+          </span>
+          <span class="ml-2 text-sm">Disconnected</span>
+        `;
+      });
+
+      socket.on("system-stats", (data) => {
+        const cpuPercent = data.cpuUsage.toFixed(1);
+        document.getElementById("cpuUsage").innerText = `${cpuPercent}%`;
+        updateProgressRing("#cpuUsage + div svg", cpuPercent);
+
+        // Update CPU chart
+        cpuData.push(cpuPercent);
+        if (cpuData.length > 20) cpuData.shift();
+        cpuChart.data.datasets[0].data = cpuData;
+        cpuChart.update();
+
+        // Update memory display
+        const memPercent = data.memoryUsage.toFixed(1);
+        document.getElementById("memoryUsage").innerText = `${memPercent}%`;
+        document.getElementById("memoryDetails").innerText = `${formatBytes(
+          data.usedMemory
+        )} / ${formatBytes(data.totalMemory)}`;
+        document.getElementById("memoryBar").style.width = `${memPercent}%`;
+        updateProgressRing("#memoryUsage + div svg", memPercent);
+
+        // Update process table
+        let tableBody = document.getElementById("processTable");
+        tableBody.innerHTML = "";
+
+        data.processes.forEach((proc) => {
+          const cpuUsage = parseFloat(proc.cpu);
+          const memUsage = parseFloat(proc.mem);
+
+          // Determine row color based on resource usage
+          let rowClass = "";
+          if (cpuUsage > 70 || memUsage > 70) {
+            rowClass = "bg-red-900 bg-opacity-30";
+          } else if (cpuUsage > 50 || memUsage > 50) {
+            rowClass = "bg-yellow-900 bg-opacity-30";
+          }
+
+          const row = document.createElement("tr");
+          row.className = `${rowClass} hover:bg-gray-700 transition-colors`;
+          row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap font-mono">${proc.pid}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="flex items-center">
+                <div class="w-8 mr-2">${proc.cpu}</div>
+                <div class="w-full bg-gray-700 rounded-full h-2">
+                  <div class="bg-blue-500 h-2 rounded-full" style="width: ${cpuUsage}%"></div>
+                </div>
+              </div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap">
+              <div class="flex items-center">
+                <div class="w-8 mr-2">${proc.mem}</div>
+                <div class="w-full bg-gray-700 rounded-full h-2">
+                  <div class="bg-green-500 h-2 rounded-full" style="width: ${memUsage}%"></div>
+                </div>
+              </div>
+            </td>
+            <td class="px-6 py-4">
+              <div class="text-sm text-gray-300 truncate max-w-xs" title="${proc.command}">${proc.command}</div>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+              <button class="text-red-400 hover:text-red-300 mr-3" onclick="killProcess(${proc.pid})">
+                Kill
+              </button>
+              <button class="text-blue-400 hover:text-blue-300" onclick="showProcessDetails(${proc.pid})">
+                Details
+              </button>
+            </td>
+          `;
+          tableBody.appendChild(row);
+        });
+
+        // Update process count
+        document.getElementById("processCount").textContent =
+          data.processes.length;
+
+        // Update system info
+        if (data.systemInfo) {
+          document.getElementById("hostname").textContent =
+            data.systemInfo.hostname;
+          document.getElementById(
+            "platform"
+          ).textContent = `${data.systemInfo.platform} (${data.systemInfo.release})`;
+          document.getElementById("cpuCores").textContent =
+            data.systemInfo.cpus.length;
+          document.getElementById("cpuModel").textContent =
+            data.systemInfo.cpus[0].model.split("@")[0].trim();
+          document.getElementById("totalMemory").textContent = formatBytes(
+            data.systemInfo.totalMemory
+          );
+
+          // Update CPU cores visualization
+          const coresContainer = document.getElementById("cpuCoresContainer");
+          coresContainer.innerHTML = "";
+          data.systemInfo.cpus.forEach((cpu, i) => {
+            const coreUsage = data.coreUsage ? data.coreUsage[i] || 0 : 0;
+            coresContainer.innerHTML += `
+              <div class="text-center">
+                <div class="h-24 mx-auto">
+                  <svg class="progress-ring" width="80" height="80">
+                    <circle
+                      class="progress-ring__circle"
+                      stroke="#3b82f6"
+                      stroke-width="6"
+                      fill="transparent"
+                      r="30"
+                      cx="40"
+                      cy="40"
+                      stroke-dasharray="188.4"
+                      stroke-dashoffset="188.4"
+                    />
+                  </svg>
+                </div>
+                <div class="mt-2 font-medium">Core ${i}</div>
+                <div class="text-sm text-gray-400" id="core-${i}">${coreUsage.toFixed(
+              1
+            )}%</div>
+              </div>
+            `;
+            updateProgressRing(`#core-${i}`, coreUsage);
+          });
+        }
+
+        // Update uptime
+        if (data.uptime) {
+          document.getElementById("uptime").textContent = formatUptime(
+            data.uptime
+          );
+        }
+
+        // Update network stats
+        if (data.networkStats) {
+          const now = Date.now();
+          const interval = 2; // seconds between updates
+
+          if (!firstNetworkMeasurement) {
+            const rxDiff = data.networkStats.rx - previousNetworkStats.rx;
+            const txDiff = data.networkStats.tx - previousNetworkStats.tx;
+
+            const rxRate = rxDiff / interval;
+            const txRate = txDiff / interval;
+
+            document.getElementById("networkDownload").textContent =
+              formatBytes(rxRate) + "/s";
+            document.getElementById("networkUpload").textContent =
+              formatBytes(txRate) + "/s";
+
+            // Simple scaling for visualization
+            const maxRate = 1024 * 1024 * 10; // 10 MB/s
+            const downloadPercent = Math.min(100, (rxRate / maxRate) * 100);
+            const uploadPercent = Math.min(100, (txRate / maxRate) * 100);
+
+            document.getElementById(
+              "downloadBar"
+            ).style.width = `${downloadPercent}%`;
+            document.getElementById(
+              "uploadBar"
+            ).style.width = `${uploadPercent}%`;
+          }
+
+          previousNetworkStats = data.networkStats;
+          firstNetworkMeasurement = false;
+        }
+      });
+
+      // Process filter functionality
+      document
+        .getElementById("processFilter")
+        .addEventListener("input", (e) => {
+          const filter = e.target.value.toLowerCase();
+          const rows = document.querySelectorAll("#processTable tr");
+
+          rows.forEach((row) => {
+            const command = row
+              .querySelector("td:nth-child(4)")
+              .textContent.toLowerCase();
+            if (command.includes(filter)) {
+              row.style.display = "";
+            } else {
+              row.style.display = "none";
+            }
+          });
+        });
+
+      // Kill process function
+      function killProcess(pid) {
+        if (confirm(`Are you sure you want to kill process ${pid}?`)) {
+          socket.emit("kill-process", pid);
+        }
+      }
+
+      // Show process details function
+      function showProcessDetails(pid) {
+        socket.emit("get-process-details", pid, (details) => {
+          alert(
+            `Process Details (PID: ${pid}):\n\n` +
+              `Command: ${details.command}\n` +
+              `CPU: ${details.cpu}%\n` +
+              `Memory: ${details.mem}%\n` +
+              `User: ${details.user}\n` +
+              `Started: ${details.startTime}`
+          );
+        });
+      }
+
+      // Initialize the dashboard
+      document.addEventListener("DOMContentLoaded", () => {
+        initCPUChart();
+
+        // Request initial system info
+        socket.emit("get-system-info");
+
+        // Add glow effect to CPU card on high usage
+        setInterval(() => {
+          const cpuPercent = parseFloat(
+            document.getElementById("cpuUsage").textContent
+          );
+          const cpuCard = document
+            .querySelector("#cpuUsage")
+            .closest(".bg-gray-800");
+          if (cpuPercent > 80) {
+            cpuCard.classList.add("glow", "animate-pulse");
+          } else {
+            cpuCard.classList.remove("glow", "animate-pulse");
+          }
+        }, 1000);
+      });
+    </script>
+  </body>
+</html>

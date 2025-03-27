@@ -1,0 +1,22 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "http": "^0.0.1-security",
+    "pidusage": "^4.0.0",
+    "ps-node": "^0.1.6",
+    "socket.io": "^4.8.1",
+    "systeminformation": "^5.25.11"
+  }
+}
