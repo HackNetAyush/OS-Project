@@ -4,12 +4,12 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const os = require("os");
 const pidusage = require("pidusage");
-const si = require("systeminformation"); // Add this package: npm install systeminformation
+const si = require("systeminformation"); 
 
 const app = express();
 const server = http.createServer(app);
 
-const frontendURL = "http://localhost:5500"; // Change this to your frontend URL
+const frontendURL = "http://localhost:5500";
 
 const io = new Server(server, {
   cors: {
@@ -20,13 +20,13 @@ const io = new Server(server, {
 
 app.use(cors({ origin: frontendURL }));
 
-// Store previous network stats for delta calculation
+
 let previousNetworkStats = {
   rx: 0,
   tx: 0,
 };
 
-// Cache system info
+
 let systemInfo = null;
 
 async function getSystemInfo() {
@@ -159,7 +159,6 @@ async function getProcesses() {
 io.on("connection", (socket) => {
   console.log("A client connected:", socket.id);
 
-  // Send initial system info
   getSystemInfo().then((info) => {
     socket.emit("system-info", info);
   });
@@ -210,7 +209,7 @@ io.on("connection", (socket) => {
       const usedMemory = totalMem - memoryUsage.free;
 
       socket.emit("system-stats", {
-        cpuUsage: cpuData.currentLoad, // Use currentLoad directly from the object
+        cpuUsage: cpuData.currentLoad, 
         memoryUsage: (usedMemory / totalMem) * 100,
         usedMemory: usedMemory,
         totalMemory: totalMem,
@@ -225,7 +224,7 @@ io.on("connection", (socket) => {
     }
   }, 1000);
 
-  // Handle process killing
+  
   socket.on("kill-process", (pid) => {
     try {
       process.kill(pid);
@@ -235,7 +234,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle process details request
+ 
   socket.on("get-process-details", (pid, callback) => {
     require("child_process").exec(
       `ps -p ${pid} -o user,pid,%cpu,%mem,command,start`,
